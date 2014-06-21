@@ -5,15 +5,23 @@ __version__ = "1.0.0"
 
 class Connect:
 
-    def __init__(self, db_file):
+    def __init__(self, db_file, autosave=False):
         self.db = db_file
         self.json_data = {}
+        self.autosave = autosave
         # allows find to be called multiple times, without 
         # re-reading from disk unless a change has occured
         self.stale = True
         if not os.path.exists(self.db):
            self.save()
-        
+    
+    def __autosave(func):
+        def inner(self, *args, **kwargs):
+            func(self, *args, **kwargs)
+            if self.autosave:
+                self.save()
+        return inner
+
     def _load(self):
         if self.stale:
             with open(self.db, 'rb') as fp:
@@ -23,11 +31,13 @@ class Connect:
                     with open(self.db, 'wb') as file:
                         file.write(json.dumps(self.json_data))
                     self._load()
+
     def save(self):
         with open(self.db, 'wb') as fp:
             json.dump(self.json_data, fp)
             self.stale = True
     
+    @__autosave
     def insert(self, collection, *data):
         self._load()
         if collection not in self.json_data:
@@ -35,6 +45,7 @@ class Connect:
         for new in data:
             self.json_data[collection].append(new)
 
+    @__autosave
     def update(self, collection, check, new):
         self._load()
         if collection not in self.json_data:
@@ -54,12 +65,14 @@ class Connect:
                 self.json_data[collection].remove(x)
                 self.json_data[collection].append(edited)
 
+    @__autosave
     def remove(self, collection, data):
         self._load()
         if collection not in self.json_data:
             return False
         self.json_data[collection].remove(data) #Will only delete one entry
             
+    @__autosave
     def find(self, collection, data):
         self._load()
         if collection not in self.json_data:
@@ -83,6 +96,7 @@ class Connect:
                 output.append(x)
         return output
 
+    @__autosave
     def get(self, collection, key, all_=False):
         self._load()
         if collection not in self.json_data:
@@ -95,7 +109,8 @@ class Connect:
         else:
             out = self.json_data[collection] 
         return out if out else False
-        
+
+    @__autosave
     def contains(self, collection, key):
         self._load()
         if collection not in self.json_data:
